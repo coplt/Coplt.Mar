@@ -41,13 +41,15 @@ File layout:
 
   Little endian `uint` manifest size
 
-## Use
+## Usage
 
 ```csharp
 {
     await using var builder = await MarBuilder.CreateAsync("./test.mar");
     await builder.AddFileAsync("test.txt", "Hello, World!");
+    // await builder.AddFileAsync("test.txt", "Hello, World!", Encoding.Utf16); // Specify encoding
     await builder.AddFileAsync("some.bin", new byte[] { 1, 2, 3, 4, 5 });
+    // await builder.AddFileAsync("test.txt", SomeStream);
 }
 
 {
