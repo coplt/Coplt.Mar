@@ -3,13 +3,34 @@
     <PropertyGroup>
         <TargetFramework>net9.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
+        <LangVersion>13.0</LangVersion>
+        <Version>0.1.0</Version>
+        <IsAotCompatible>True</IsAotCompatible>
         <Nullable>enable</Nullable>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <Description>Simple uncompressed random access archive format</Description>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <RepositoryUrl>https://github.com/coplt/Coplt.Mar</RepositoryUrl>
+        <PackageProjectUrl>https://github.com/coplt/Coplt.Mar</PackageProjectUrl>
+        <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
+        <NoWarn>MSB3884</NoWarn>
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="Coplt.Dropping" Version="0.6.0" />
-      <PackageReference Include="MessagePack" Version="3.1.3" />
+        <PackageReference Include="Coplt.Dropping" Version="0.6.0"/>
+        <PackageReference Include="MessagePack" Version="3.1.3"/>
+    </ItemGroup>
+    
+    <ItemGroup>
+        <None Include="..\LICENSE.md">
+            <Pack>True</Pack>
+            <PackagePath>\</PackagePath>
+        </None>
+        <None Include="..\README.md">
+            <Pack>True</Pack>
+            <PackagePath>\</PackagePath>
+        </None>
     </ItemGroup>
 
 </Project>

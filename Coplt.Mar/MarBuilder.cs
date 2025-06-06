@@ -83,8 +83,16 @@ public sealed partial class MarBuilder : CriticalFinalizerObject, IAsyncDisposab
 
     #region WriteFileHead
 
-    private void WriteFileHead() => m_stream.Write(Common.FileHead);
-    private async ValueTask WriteFileHeadAsync() => await m_stream.WriteAsync(Common.FileHead);
+    private void WriteFileHead()
+    {
+        m_stream.Write(Common.FileHead);
+        MessagePackSerializer.Serialize(m_stream, Common.Version);
+    }
+    private async ValueTask WriteFileHeadAsync()
+    {
+        await m_stream.WriteAsync(Common.FileHead);
+        await MessagePackSerializer.SerializeAsync(m_stream, Common.Version);
+    }
 
     #endregion
 
@@ -120,11 +128,11 @@ public sealed partial class MarBuilder : CriticalFinalizerObject, IAsyncDisposab
 
     #region AddFile
 
-    public FileEntry AddFile(string Name)
+    public ContentScope AddFile(string Name)
     {
         if (m_entry_opened) throw new InvalidOperationException("Unable to add file, the last added file has not yet been completed");
         m_entry_opened = true;
-        return new FileEntry(this, (ulong)m_stream.Position, Name);
+        return new ContentScope(this, (ulong)m_stream.Position, Name);
     }
 
     public void AddFile(string Name, Stream Data)
@@ -147,29 +155,22 @@ public sealed partial class MarBuilder : CriticalFinalizerObject, IAsyncDisposab
         writer.Write(Data);
     }
 
-    public FileEntryAsync AddFileAsync(string Name)
-    {
-        if (m_entry_opened) throw new InvalidOperationException("Unable to add file, the last added file has not yet been completed");
-        m_entry_opened = true;
-        return new FileEntryAsync(this, (ulong)m_stream.Position, Name);
-    }
-
     public async ValueTask AddFileAsync(string Name, Stream Data)
     {
-        await using var entry = AddFileAsync(Name);
+        using var entry = AddFile(Name);
         await Data.CopyToAsync(m_stream);
     }
 
     public async ValueTask AddFileAsync(string Name, ReadOnlyMemory<byte> Data)
     {
-        await using var entry = AddFileAsync(Name);
+        using var entry = AddFile(Name);
         await m_stream.WriteAsync(Data);
     }
 
     public ValueTask AddFileAsync(string Name, string Data, Encoding? encoding = null) => AddFileAsync(Name, Data.AsMemory(), encoding);
     public async ValueTask AddFileAsync(string Name, ReadOnlyMemory<char> Data, Encoding? encoding = null)
     {
-        await using var entry = AddFileAsync(Name);
+        using var entry = AddFile(Name);
         await using var writer = new StreamWriter(m_stream, encoding ?? Encoding.UTF8, leaveOpen: true);
         await writer.WriteAsync(Data);
     }
@@ -177,7 +178,7 @@ public sealed partial class MarBuilder : CriticalFinalizerObject, IAsyncDisposab
     #endregion
 }
 
-public readonly struct FileEntry(MarBuilder builder, ulong Start, string Name) : IDisposable
+public readonly struct ContentScope(MarBuilder builder, ulong Start, string Name) : IDisposable
 {
     public MarBuilder Builder { get; } = builder;
     public Stream Stream => Builder.m_stream;
@@ -187,28 +188,6 @@ public readonly struct FileEntry(MarBuilder builder, ulong Start, string Name) :
         Builder.m_entry_opened = false;
         var offset = (ulong)Stream.Position;
         var len = offset - Start;
-        var head = new ItemMeta(len);
-        MessagePackSerializer.Serialize(Stream, head);
         Builder.m_infos[Name] = new(Start, len);
-        var meta_len = (byte)((ulong)Stream.Position - offset);
-        Stream.WriteByte(meta_len);
-    }
-}
-
-public readonly struct FileEntryAsync(MarBuilder builder, ulong Start, string Name) : IAsyncDisposable
-{
-    public MarBuilder Builder { get; } = builder;
-    public Stream Stream => Builder.m_stream;
-
-    public async ValueTask DisposeAsync()
-    {
-        Builder.m_entry_opened = false;
-        var offset = (ulong)Stream.Position;
-        var len = offset - Start;
-        var head = new ItemMeta(len);
-        await MessagePackSerializer.SerializeAsync(Stream, head);
-        Builder.m_infos[Name] = new(Start, len);
-        var meta_len = (byte)((ulong)Stream.Position - offset);
-        Stream.WriteByte(meta_len);
     }
 }
