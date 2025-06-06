@@ -7,7 +7,6 @@
 - Random Access
 - No compression
 - No hash verification (CRC SHA ...)
-- Cannot be modified after creation
 - Get `ReadOnlySpan<byte>` directly through memory mapping
 
 ### Detail
