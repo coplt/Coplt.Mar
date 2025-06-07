@@ -11,7 +11,7 @@ using Microsoft.Win32.SafeHandles;
 namespace Coplt.Mar;
 
 [Dropping(Unmanaged = true)]
-public sealed unsafe partial class MarArchive
+public sealed partial class MarArchive
 {
     #region Fields
 
@@ -19,7 +19,7 @@ public sealed unsafe partial class MarArchive
     private readonly MemoryMappedFile m_file;
     private readonly MemoryMappedViewAccessor m_access;
     private readonly MemoryMappedViewStream m_stream;
-    private readonly byte* m_ptr;
+    private readonly unsafe byte* m_ptr;
     private readonly long m_size;
     private readonly FrozenDictionary<string, ItemInfo> m_info;
     private readonly bool m_owned;
@@ -29,7 +29,7 @@ public sealed unsafe partial class MarArchive
     #region Properties
 
     public MemoryMappedFile RawMemoryMappedFile => m_file;
-    public byte* RawPointer => m_ptr;
+    public unsafe byte* RawPointer => m_ptr;
     public long RawSize => m_size;
     public FrozenDictionary<string, ItemInfo> Manifest => m_info;
 
@@ -51,7 +51,7 @@ public sealed unsafe partial class MarArchive
 
     #region Ctor
 
-    private MarArchive(SafeFileHandle handle, bool owned)
+    private unsafe MarArchive(SafeFileHandle handle, bool owned)
     {
         m_handle = handle;
         m_owned = owned;
@@ -82,8 +82,8 @@ public sealed unsafe partial class MarArchive
 
     #region GetSpan
 
-    public ReadOnlySpan<byte> GetSpan(long offset, int len) => new(m_ptr + offset, len);
-    public ReadOnlySpan<byte> GetSpan(ulong offset, int len) => new(m_ptr + offset, len);
+    public unsafe ReadOnlySpan<byte> GetSpan(long offset, int len) => new(m_ptr + offset, len);
+    public unsafe ReadOnlySpan<byte> GetSpan(ulong offset, int len) => new(m_ptr + offset, len);
 
     #endregion
 
@@ -123,6 +123,64 @@ public sealed unsafe partial class MarArchive
         }
         data = (encoding ?? Encoding.UTF8).GetString(span);
         return true;
+    }
+
+    #endregion
+
+    #region TryRead
+
+    public bool TryRead(string name, Span<byte> buffer)
+    {
+        if (!m_info.TryGetValue(name, out var info)) return false;
+        if (info.Size > (uint)buffer.Length) return false;
+        var r = RandomAccess.Read(m_handle, buffer[..(int)info.Size], (long)info.Offset);
+        if ((uint)r != info.Size) throw new IOException();
+        return true;
+    }
+
+    public async ValueTask<bool> TryReadAsync(string name, Memory<byte> buffer, CancellationToken cancel = default)
+    {
+        if (!m_info.TryGetValue(name, out var info)) return false;
+        if (info.Size > (uint)buffer.Length) return false;
+        var r = await RandomAccess.ReadAsync(m_handle, buffer[..(int)info.Size], (long)info.Offset, cancel);
+        if ((uint)r != info.Size) throw new IOException();
+        return true;
+    }
+
+    public byte[]? TryRead(string name)
+    {
+        if (!m_info.TryGetValue(name, out var info)) return null;
+        var data = new byte[info.Size];
+        var r = RandomAccess.Read(m_handle, data, (long)info.Offset);
+        if ((uint)r != info.Size) throw new IOException();
+        return data;
+    }
+
+    public async ValueTask<byte[]?> TryReadAsync(string name, CancellationToken cancel = default)
+    {
+        if (!m_info.TryGetValue(name, out var info)) return null;
+        var data = new byte[info.Size];
+        var r = await RandomAccess.ReadAsync(m_handle, data, (long)info.Offset, cancel);
+        if ((uint)r != info.Size) throw new IOException();
+        return data;
+    }
+
+    public string? TryReadString(string name, Encoding? encoding = null)
+    {
+        if (!m_info.TryGetValue(name, out var info)) return null;
+        using var buffer = Pooled<byte>.Rent((int)info.Size);
+        var r = RandomAccess.Read(m_handle, buffer.Span[..(int)info.Size], (long)info.Offset);
+        if ((uint)r != info.Size) throw new IOException();
+        return (encoding ?? Encoding.UTF8).GetString(buffer.Span[..(int)info.Size]);
+    }
+
+    public async ValueTask<string?> TryReadStringAsync(string name, Encoding? encoding = null, CancellationToken cancel = default)
+    {
+        if (!m_info.TryGetValue(name, out var info)) return null;
+        using var buffer = Pooled<byte>.Rent((int)info.Size);
+        var r = await RandomAccess.ReadAsync(m_handle, buffer.Memory[..(int)info.Size], (long)info.Offset, cancel);
+        if ((uint)r != info.Size) throw new IOException();
+        return (encoding ?? Encoding.UTF8).GetString(buffer.Span[..(int)info.Size]);
     }
 
     #endregion
